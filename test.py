@@ -2,13 +2,14 @@ import pandas as pd
 import numpy as np
 
 
+from config import get_config
 from repositories.forecast_repository import ForecastRepository
 from analyzers.trend import TrendAnalyzer
 
 # Load the datamart data used by the repository
 # You can increase nrows if you want more history
 
-df = pd.read_excel("April Snapshot - May Forecasts with Actuals.xlsx")
+df = pd.read_excel(get_config()["data_paths"]["FORECAST_FILE"])
 
 # repo = DatamartRepository(df)
 # analyzer = TrendAnalyzer(repo)

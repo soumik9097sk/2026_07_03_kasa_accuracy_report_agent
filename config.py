@@ -1,8 +1,23 @@
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 def get_config() -> dict:
     """
     Returns the configuration mapping for datamart, forecast, and actual columns.
     """
     return {
+        "data_paths": {
+            "DATAMART_FILE": os.path.join(
+                BASE_DIR,
+                "data",
+                "DATAMART_FILLNA_3268_KEYS_ALL_FAMILIES_TILL_DEC_2026_20th_Nov_v1_part_12d.csv",
+            ),
+            "FORECAST_FILE": os.path.join(
+                BASE_DIR, "data", "April Snapshot - May Forecasts with Actuals.xlsx"
+            ),
+        },
         "datamart_columns": {
             "RETAILER": "CC_RETAILER_NAME",
             "KEY": "KEY",

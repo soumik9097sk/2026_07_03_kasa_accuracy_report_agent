@@ -24,9 +24,9 @@ def _resolve_forecast_columns(
 
 
 def _validate_metric_frame(
-    df: pd.DataFrame, forecast_col: str, actual_col: str
+    df: pd.DataFrame, value_col: str, key_col: str, week_col: str
 ) -> pd.DataFrame:
-    required = {forecast_col, actual_col}
+    required = {value_col, key_col, week_col}
     if not required.issubset(df.columns):
         missing = sorted(required - set(df.columns))
         raise ValueError(f"Missing required columns: {missing}")
@@ -44,8 +44,8 @@ def _align_forecast_actual(
     forecast_col, actual_col, key_col, week_col = _resolve_forecast_columns(
         forecast_col, actual_col, key_col, week_col
     )
-    forecast_df = _validate_metric_frame(forecast_df, forecast_col, actual_col)
-    actual_df = _validate_metric_frame(actual_df, forecast_col, actual_col)
+    forecast_df = _validate_metric_frame(forecast_df, forecast_col, key_col, week_col)
+    actual_df = _validate_metric_frame(actual_df, actual_col, key_col, week_col)
 
     if key_col not in forecast_df.columns or key_col not in actual_df.columns:
         raise ValueError(f"Missing key column: {key_col}")
@@ -62,10 +62,18 @@ def _align_forecast_actual(
     if merged.empty:
         return pd.DataFrame(columns=[week_col, key_col, "forecast", "actual"])
 
-    merged["forecast"] = pd.to_numeric(
-        merged[f"{forecast_col}_forecast"], errors="coerce"
+    forecast_value_col = (
+        f"{forecast_col}_forecast"
+        if f"{forecast_col}_forecast" in merged.columns
+        else forecast_col
     )
-    merged["actual"] = pd.to_numeric(merged[f"{actual_col}_actual"], errors="coerce")
+    actual_value_col = (
+        f"{actual_col}_actual"
+        if f"{actual_col}_actual" in merged.columns
+        else actual_col
+    )
+    merged["forecast"] = pd.to_numeric(merged[forecast_value_col], errors="coerce")
+    merged["actual"] = pd.to_numeric(merged[actual_value_col], errors="coerce")
     return merged[[week_col, key_col, "forecast", "actual"]].dropna()
 
 
