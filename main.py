@@ -1,67 +1,16 @@
-import argparse
-import json
+"""Backwards-compatible entry point: `python3 main.py "<query>" [--json] [--ppt]`.
+
+The real CLI lives in `src/kasa_agent/cli.py` and is installed as the
+`kasa-report` console script (`pip install -e .`). This shim keeps the old
+invocation working from a plain source checkout without an install.
+"""
+
+import os
 import sys
 
-import pandas as pd
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
-from agents.analyst_agent import generate_accuracy_report
-from config import get_config
-
-
-def _load_forecast_df() -> pd.DataFrame:
-    return pd.read_excel(get_config()["data_paths"]["FORECAST_FILE"])
-
-
-def _load_datamart_df():
-    """Best-effort datamart load -- root-cause drill-down is skipped if this fails."""
-    try:
-        df = pd.read_csv(get_config()["data_paths"]["DATAMART_FILE"])
-    except (FileNotFoundError, OSError) as exc:
-        print(f"Warning: could not load datamart data ({exc}); "
-              f"continuing with forecast-accuracy data only.", file=sys.stderr)
-        return None
-
-    required_cols = set(get_config()["datamart_columns"].values())
-    if not required_cols.issubset(df.columns):
-        print(
-            "Warning: datamart file is missing expected columns (likely a "
-            "header-less chunk); continuing with forecast-accuracy data only.",
-            file=sys.stderr,
-        )
-        return None
-    return df
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate a forecast-accuracy report with root-cause reasons."
-    )
-    parser.add_argument(
-        "query",
-        nargs="*",
-        help='Free-text question, e.g. "why is AMAZON doing bad in month 5 2026"',
-    )
-    parser.add_argument(
-        "--json", action="store_true", help="Print the full structured report as JSON."
-    )
-    args = parser.parse_args()
-
-    query = " ".join(args.query) if args.query else input("Query: ").strip()
-
-    forecast_df = _load_forecast_df()
-    datamart_df = _load_datamart_df()
-
-    result = generate_accuracy_report(query, forecast_df, datamart_df)
-
-    if isinstance(result, str):
-        print(result)
-        return
-
-    if args.json:
-        print(json.dumps(result, indent=2, default=str))
-    else:
-        print(result["narrative"])
-
+from kasa_agent.cli import main
 
 if __name__ == "__main__":
     main()

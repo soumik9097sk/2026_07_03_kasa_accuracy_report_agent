@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Dict, Any
 
-from config import get_config
+from kasa_agent.config import get_config
 
 
 class DatamartRepository:
@@ -48,10 +48,10 @@ class DatamartRepository:
     def get_retailer_category(self, retailer, category, start_date, end_date):
         return self.df[
             (self.df[self.cols["RETAILER"]] == retailer)
-            & (self.df[self.cols["CATEGORY"]] == category)
-            & (self.cols["WEEK_END_DATE"] >= pd.to_datetime(start_date))
-            & (self.cols["WEEK_END_DATE"] >= pd.to_datetime(end_date))
-        ]
+            & (self.df[self.cols["PRODUCT_CATEGORY"]] == category)
+            & (self.df[self.cols["WEEK_END_DATE"]] >= pd.to_datetime(start_date))
+            & (self.df[self.cols["WEEK_END_DATE"]] <= pd.to_datetime(end_date))
+        ].copy()
 
     def get_sku_history(self, sku, start_date, end_date):
         return self.df[

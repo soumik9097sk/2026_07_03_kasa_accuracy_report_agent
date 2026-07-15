@@ -11,3 +11,14 @@ __pycache__/
 .venv/
 venv/
 
+# Generated report output
+output/
+
+# Packaging build artifacts
+*.egg-info/
+build/
+dist/
+
+# macOS
+.DS_Store
+

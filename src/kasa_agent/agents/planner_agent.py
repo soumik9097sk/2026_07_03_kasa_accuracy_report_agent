@@ -41,12 +41,17 @@ class AnalysisRequest:
     Structured input for the analyst agent: what entity, at what level,
     for which year/month, is the user asking about. Populated by
     `extract_analysis_request` from the user's free-text query.
+
+    `retailer` is an extra scope, only meaningful when level == "category":
+    which retailer's slice of that category to analyze (e.g. "AMAZON Stand
+    Mixers" -> level="category", identifier="Stand Mixers", retailer="AMAZON").
     """
 
     level: Optional[str] = None
     identifier: Optional[str] = None
     year: Optional[int] = None
     month: Optional[int] = None
+    retailer: Optional[str] = None
 
 
 def validate_request(request: AnalysisRequest) -> Optional[str]:
@@ -92,13 +97,20 @@ these keys:
   "last month".
 - "month": an integer 1-12 explicitly stated in the question -- or null if \
   not stated. Do not infer a month from relative phrases.
+- "retailer": ONLY set this when "level" is "category" AND the question also \
+  names a specific retailer to scope that category to (e.g. "AMAZON Stand \
+  Mixers category" means the category "Stand Mixers" within retailer \
+  "AMAZON") -- the retailer name copied verbatim, or null otherwise.
 
 Examples:
 Question: "why is AMAZON doing bad in the month 6 in 2026"
-{{"level": "retailer", "identifier": "AMAZON", "year": 2026, "month": 6}}
+{{"level": "retailer", "identifier": "AMAZON", "year": 2026, "month": 6, "retailer": null}}
 
 Question: "why is sales bad this year"
-{{"level": null, "identifier": null, "year": null, "month": null}}
+{{"level": null, "identifier": null, "year": null, "month": null, "retailer": null}}
+
+Question: "Analyze AMAZON Stand Mixers category 2026 month 5"
+{{"level": "category", "identifier": "Stand Mixers", "year": 2026, "month": 5, "retailer": "AMAZON"}}
 
 User question: {query}
 """
@@ -134,6 +146,7 @@ def extract_analysis_request(query: str) -> AnalysisRequest:
         identifier=data.get("identifier") or None,
         year=int(data["year"]) if data.get("year") else None,
         month=int(data["month"]) if data.get("month") else None,
+        retailer=data.get("retailer") or None if level == "category" else None,
     )
 
 
@@ -149,6 +162,14 @@ class PlanStep:
     `for_each`, when set, tells the executor to repeat this step once per item
     in a prior step's output list, referenced as "<step_id>.<field>". Args
     containing "{item.<field>}" are substituted per iteration.
+
+    `pos_unit_bounded`, when True, tells the executor this step reads actual
+    POS_UNIT (sales) history, which the datamart only has up to some cutoff --
+    rows beyond it are placeholder feature rows (POS_UNIT filled with 0/-999)
+    generated for forward-looking inference, not real sales. The executor
+    clips `end_date` to that cutoff before calling. Feature-only steps
+    (price/promo/discount, which stay populated into the future) leave this
+    False.
     """
 
     step_id: str
@@ -159,6 +180,7 @@ class PlanStep:
     args: Dict[str, Any] = field(default_factory=dict)
     for_each: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
+    pos_unit_bounded: bool = False
 
 
 def _month_bounds(year: int, month: int) -> tuple[str, str]:
@@ -195,7 +217,7 @@ def _drill_down_steps(
             step_id="key_accuracy",
             description="Get forecast accuracy for the drilled-down key.",
             repository="forecast",
-            module="analyzers.analyzer_main",
+            module="kasa_agent.analyzers.analyzer_main",
             function="get_forecast_key_accuracy",
             args={"year": year, "month": month, "key": key_placeholder},
             for_each=for_each,
@@ -209,7 +231,7 @@ def _drill_down_steps(
                 "delisting)."
             ),
             repository="datamart",
-            module="analyzers.trend",
+            module="kasa_agent.analyzers.trend",
             function="TrendAnalyzer.get_level_trend_summary",
             args={
                 "level": "key",
@@ -220,6 +242,7 @@ def _drill_down_steps(
             },
             for_each=for_each,
             depends_on=["entity_accuracy"],
+            pos_unit_bounded=True,
         ),
         PlanStep(
             step_id="key_seasonality",
@@ -228,7 +251,7 @@ def _drill_down_steps(
                 "the report month is naturally a low/high month."
             ),
             repository="datamart",
-            module="analyzers.seasonality",
+            module="kasa_agent.analyzers.seasonality",
             function="SeasonalityAnalyzer.get_level_seasonality_summary",
             args={
                 "level": "key",
@@ -239,6 +262,7 @@ def _drill_down_steps(
             },
             for_each=for_each,
             depends_on=["entity_accuracy"],
+            pos_unit_bounded=True,
         ),
         PlanStep(
             step_id="key_promotions",
@@ -248,7 +272,7 @@ def _drill_down_steps(
                 "sales that did not materialize."
             ),
             repository="datamart",
-            module="analyzers.promotions",
+            module="kasa_agent.analyzers.promotions",
             function="PromoAnalyzer.get_feature_summary_dict",
             args={
                 "level": "key",
@@ -294,19 +318,40 @@ def create_plan(request: AnalysisRequest) -> List[PlanStep]:
     month_start, month_end = _month_bounds(year, month)
     history_start = _history_start(month_start)
 
-    steps: List[PlanStep] = [
-        PlanStep(
+    if level == "category" and request.retailer:
+        # Compound scope: this category within one specific retailer, not
+        # the category across all retailers.
+        entity_step = PlanStep(
+            step_id="entity_accuracy",
+            description=(
+                f"Get forecast accuracy for category={identifier} within "
+                f"retailer={request.retailer} ({year}-{month:02d}) from the "
+                "forecast repository."
+            ),
+            repository="forecast",
+            module="kasa_agent.analyzers.analyzer_main",
+            function="get_forecast_retailer_category_accuracy",
+            args={
+                "year": year,
+                "month": month,
+                "retailer": request.retailer,
+                "category": identifier,
+            },
+        )
+    else:
+        entity_step = PlanStep(
             step_id="entity_accuracy",
             description=(
                 f"Get forecast accuracy for {level}={identifier} "
                 f"({year}-{month:02d}) from the forecast repository."
             ),
             repository="forecast",
-            module="analyzers.analyzer_main",
+            module="kasa_agent.analyzers.analyzer_main",
             function=_ACCURACY_FUNCTION_BY_LEVEL[level],
             args={"year": year, "month": month, level: identifier},
         )
-    ]
+
+    steps: List[PlanStep] = [entity_step]
 
     if level == "key":
         # Already atomic -- gather context directly, no fan-out needed.
@@ -336,7 +381,7 @@ def create_plan(request: AnalysisRequest) -> List[PlanStep]:
                 "the final accuracy report for the requested entity."
             ),
             repository="none",
-            module="agents.planner_agent",
+            module="kasa_agent.agents.planner_agent",
             function="<analyst_agent_synthesis>",
             depends_on=[
                 "entity_accuracy",

@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 
-from config import get_config
+from kasa_agent.config import get_config
 
 
 def _resolve_forecast_columns(
@@ -203,7 +203,7 @@ def calculate_top5_worse_keys(
     if merged.empty:
         return []
 
-    def _metric_summary(group: pd.DataFrame) -> Dict[str, Any]:
+    def _metric_summary(key: Any, group: pd.DataFrame) -> Dict[str, Any]:
         actual = group["actual"].to_numpy(dtype=float)
         forecast = group["forecast"].to_numpy(dtype=float)
         abs_error = np.abs(actual - forecast)
@@ -229,14 +229,19 @@ def calculate_top5_worse_keys(
             * 100
         )
         return {
-            "key": str(group[key_col].iloc[0]),
+            "key": str(key),
             "mape": float(mape) if not np.isnan(mape) else np.nan,
             "mae": float(mae) if not np.isnan(mae) else np.nan,
             "wmape": float(wmape) if not np.isnan(wmape) else np.nan,
             "smape": float(smape) if not np.isnan(smape) else np.nan,
         }
 
-    summaries = merged.groupby(key_col).apply(_metric_summary).tolist()
+    # Iterate groups directly (rather than groupby().apply()) so this doesn't
+    # depend on pandas' group-column-inclusion behavior, which changed
+    # between pandas 2.x and 3.x.
+    summaries = [
+        _metric_summary(key, group) for key, group in merged.groupby(key_col)
+    ]
     summaries = sorted(summaries, key=lambda item: item.get("mape", float("inf")))
     return summaries[:5]
 

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kasa-accuracy-report-agent"
+version = "0.1.0"
+description = "Agentic pipeline that turns a free-text question into a data-grounded forecast-accuracy root-cause report (optionally as a PowerPoint slide)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # pandas pinned below 3.0: pandas 3.0 changed groupby().apply()'s handling of
+    # the grouping column and calculate_top5_worse_keys has not been re-verified
+    # against it (see CLAUDE.md).
+    "pandas>=2.0,<3.0",
+    "numpy",
+    "openpyxl",
+    "google-genai",
+    "python-dotenv",
+    "matplotlib",
+    "python-pptx",
+]
+
+[project.scripts]
+kasa-report = "kasa_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

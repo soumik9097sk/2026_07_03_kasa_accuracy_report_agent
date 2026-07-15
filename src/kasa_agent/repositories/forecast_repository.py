@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Dict, Any
 
-from config import get_config
+from kasa_agent.config import get_config
 
 
 class ForecastRepository:
@@ -22,6 +22,15 @@ class ForecastRepository:
         return self.df.loc[
             (self.df[self.cols["YEAR"]] == year)
             & (self.df[self.cols["MONTH"]] == month)
+            & (self.df[self.cols["PRODUCT_CATEGORY"]] == category),
+            [self.cols["WEEK"],self.cols["KEY"], self.cols["FORECAST"]],
+        ]
+
+    def get_forecast_retailer_category(self, year, month, retailer, category):
+        return self.df.loc[
+            (self.df[self.cols["YEAR"]] == year)
+            & (self.df[self.cols["MONTH"]] == month)
+            & (self.df[self.cols["RETAILER"]] == retailer)
             & (self.df[self.cols["PRODUCT_CATEGORY"]] == category),
             [self.cols["WEEK"],self.cols["KEY"], self.cols["FORECAST"]],
         ]
@@ -54,6 +63,15 @@ class ForecastRepository:
             (self.df[self.cols["YEAR"]] == year)
             & (self.df[self.cols["MONTH"]] == month)
             & (self.df[self.cols["RETAILER"]] == retailer),
+            [self.cols["WEEK"],self.cols["KEY"], self.cols["ACTUAL"]],
+        ]
+
+    def get_actual_retailer_category(self, year, month, retailer, category):
+        return self.df.loc[
+            (self.df[self.cols["YEAR"]] == year)
+            & (self.df[self.cols["MONTH"]] == month)
+            & (self.df[self.cols["RETAILER"]] == retailer)
+            & (self.df[self.cols["PRODUCT_CATEGORY"]] == category),
             [self.cols["WEEK"],self.cols["KEY"], self.cols["ACTUAL"]],
         ]
 

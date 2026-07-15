@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Dict, Any
 
-from config import get_config
+from kasa_agent.config import get_config
 
 
 class SummaryService:

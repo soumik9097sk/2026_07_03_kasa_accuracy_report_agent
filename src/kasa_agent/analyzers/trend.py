@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 
-from repositories.datamart_repository import DatamartRepository
+from kasa_agent.repositories.datamart_repository import DatamartRepository
 
 
 class TrendAnalyzer:

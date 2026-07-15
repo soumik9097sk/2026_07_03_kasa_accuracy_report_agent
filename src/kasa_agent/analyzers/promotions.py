@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 
-from repositories.datamart_repository import DatamartRepository
+from kasa_agent.repositories.datamart_repository import DatamartRepository
 
 
 class PromoAnalyzer:
@@ -32,9 +32,11 @@ class PromoAnalyzer:
         frame = self._get_level_frame(level, identifier, start_date, end_date)
         date_col = self.repository.cols["WEEK_END_DATE"]
         feature_col = self.repository.cols["PROMO_PRICE"]
+        values = frame[feature_col].replace(-999, float("nan"))
         return (
-            frame.groupby(date_col)[feature_col]
-            .sum()
+            values.groupby(frame[date_col])
+            .mean()
+            .dropna()
             .sort_index()
             .rename(f"{level.lower()}_{feature_col}_trend")
         )
@@ -43,9 +45,11 @@ class PromoAnalyzer:
         frame = self._get_level_frame(level, identifier, start_date, end_date)
         date_col = self.repository.cols["WEEK_END_DATE"]
         feature_col = self.repository.cols["PRICE"]
+        values = frame[feature_col].replace(-999, float("nan"))
         return (
-            frame.groupby(date_col)[feature_col]
-            .sum()
+            values.groupby(frame[date_col])
+            .mean()
+            .dropna()
             .sort_index()
             .rename(f"{level.lower()}_{feature_col}_trend")
         )
@@ -54,9 +58,11 @@ class PromoAnalyzer:
         frame = self._get_level_frame(level, identifier, start_date, end_date)
         date_col = self.repository.cols["WEEK_END_DATE"]
         feature_col = self.repository.cols["DISCOUNT"]
+        values = frame[feature_col].replace(-999, float("nan"))
         return (
-            frame.groupby(date_col)[feature_col]
-            .sum()
+            values.groupby(frame[date_col])
+            .mean()
+            .dropna()
             .sort_index()
             .rename(f"{level.lower()}_{feature_col}_trend")
         )
@@ -73,9 +79,10 @@ class PromoAnalyzer:
         date_col = self.repository.cols["WEEK"]
         feature_col = self.repository.cols["PROMO_PRICE"]
         combined = pd.concat([frame, frame_lag52], ignore_index=True)
+        combined[feature_col] = combined[feature_col].replace(-999, float("nan"))
         return (
             combined.groupby([date_col, year_col])[feature_col]
-            .sum()
+            .mean()
             .sort_index()
             .unstack()
         )
@@ -92,9 +99,10 @@ class PromoAnalyzer:
         date_col = self.repository.cols["WEEK"]
         feature_col = self.repository.cols["PRICE"]
         combined = pd.concat([frame, frame_lag52], ignore_index=True)
+        combined[feature_col] = combined[feature_col].replace(-999, float("nan"))
         return (
             combined.groupby([date_col, year_col])[feature_col]
-            .sum()
+            .mean()
             .sort_index()
             .unstack()
         )
@@ -111,9 +119,10 @@ class PromoAnalyzer:
         date_col = self.repository.cols["WEEK"]
         feature_col = self.repository.cols["DISCOUNT"]
         combined = pd.concat([frame, frame_lag52], ignore_index=True)
+        combined[feature_col] = combined[feature_col].replace(-999, float("nan"))
         return (
             combined.groupby([date_col, year_col])[feature_col]
-            .sum()
+            .mean()
             .sort_index()
             .unstack()
         )
@@ -124,7 +133,11 @@ class PromoAnalyzer:
         if trend_series.empty:
             return {
                 "trend": "flat",
+                "first_value": None,
+                "last_value": None,
                 "comp_to_last_year": "same",
+                "current_avg": None,
+                "previous_avg": None,
                 "weekly_comparison": [],
             }
 
@@ -142,6 +155,8 @@ class PromoAnalyzer:
         year_columns = [col for col in comparison_df.columns if col.isdigit()]
         if len(year_columns) < 2:
             comp_to_last_year = "same"
+            current_avg = None
+            previous_avg = None
             weekly_comparison = []
         else:
             current_year = year_columns[-1]
@@ -150,13 +165,17 @@ class PromoAnalyzer:
             previous_series = pd.to_numeric(
                 comparison_df[previous_year], errors="coerce"
             )
-            current_mean = (
-                float(current_series.mean()) if not current_series.empty else 0.0
+            current_avg = (
+                float(current_series.mean()) if current_series.notna().any() else None
             )
-            previous_mean = (
-                float(previous_series.mean()) if not previous_series.empty else 0.0
+            previous_avg = (
+                float(previous_series.mean()) if previous_series.notna().any() else None
             )
-            if current_mean < previous_mean:
+            current_mean = current_avg or 0.0
+            previous_mean = previous_avg or 0.0
+            if current_avg is None or previous_avg is None:
+                comp_to_last_year = "same"
+            elif current_mean < previous_mean:
                 comp_to_last_year = "decreased"
             elif current_mean > previous_mean:
                 comp_to_last_year = "increased"
@@ -183,7 +202,11 @@ class PromoAnalyzer:
 
         return {
             "trend": trend,
+            "first_value": first_value,
+            "last_value": last_value,
             "comp_to_last_year": comp_to_last_year,
+            "current_avg": current_avg,
+            "previous_avg": previous_avg,
             "weekly_comparison": weekly_comparison,
         }
 

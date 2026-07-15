@@ -4,16 +4,16 @@ from typing import Any, Callable, Dict, Optional
 
 import pandas as pd
 
-from analyzers.forecast_analyzer_main import (
+from kasa_agent.analyzers.forecast_analyzer_main import (
     calculate_mae,
     calculate_mape,
     calculate_smape,
     calculate_top5_worse_keys,
     calculate_wmape,
 )
-from analyzers.trend import TrendAnalyzer
-from repositories.datamart_repository import DatamartRepository
-from repositories.forecast_repository import ForecastRepository
+from kasa_agent.analyzers.trend import TrendAnalyzer
+from kasa_agent.repositories.datamart_repository import DatamartRepository
+from kasa_agent.repositories.forecast_repository import ForecastRepository
 
 
 def _format_change_point(index_value: Any, year: Optional[int] = None) -> str:
@@ -381,6 +381,29 @@ def get_forecast_category_accuracy(
         category,
         repository.get_forecast_category,
         repository.get_actual_category,
+    )
+
+
+def get_forecast_retailer_category_accuracy(
+    repository: ForecastRepository,
+    year: int,
+    month: int,
+    retailer: str,
+    category: str,
+) -> Dict[str, Any]:
+    """Return forecast accuracy metrics for a category within a specific retailer."""
+    return _get_forecast_accuracy_summary(
+        repository,
+        year,
+        month,
+        "retailer_category",
+        f"{retailer} / {category}",
+        lambda y, m, _entity: repository.get_forecast_retailer_category(
+            y, m, retailer, category
+        ),
+        lambda y, m, _entity: repository.get_actual_retailer_category(
+            y, m, retailer, category
+        ),
     )
 
 
